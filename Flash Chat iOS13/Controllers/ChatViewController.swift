@@ -5,11 +5,13 @@
 
 import UIKit
 import FirebaseAuth
+import FirebaseFirestore
 
 class ChatViewController: UIViewController {
     @IBOutlet weak var tableView: UITableView!
     @IBOutlet weak var messageTextfield: UITextField!
     
+    let db = Firestore.firestore()
     
     var messages: [Message] = [
         Message(sender: "William@gmail.com", body: "That's the first message, just an example"),
@@ -24,9 +26,46 @@ class ChatViewController: UIViewController {
         tableView.dataSource = self
         
         tableView.register(UINib(nibName: K.cellNibName, bundle: nil), forCellReuseIdentifier: K.cellIdentifier)
+        
+        loadMessages()
+    }
+    
+    func loadMessages() {
+        
+        db.collection(K.FStore.collectionName).addSnapshotListener { (querySnapshot, error) in
+            self.messages = []
+            
+            if let e = error {
+                print("There was an issue retrieving data from FireStore. \(e)")
+            } else {
+                if let snapShotDocument =  querySnapshot?.documents {
+                    for doc in snapShotDocument {
+                        let data = doc.data()
+                        if let sender = data[K.FStore.senderField] as? String, let body = data[K.FStore.bodyField] as? String {
+                            self.messages.append(Message(sender: sender, body: body))
+                            
+                            DispatchQueue.main.async {
+                                self.tableView.reloadData()
+                            }
+                        }
+                        
+                        
+                    }
+                }
+            }
+        }
     }
     
     @IBAction func sendPressed(_ sender: UIButton) {
+        if let messageBody = messageTextfield.text, let messageSender = Auth.auth().currentUser?.email {
+            db.collection(K.FStore.collectionName).addDocument(data: [K.FStore.senderField: messageSender, K.FStore.bodyField: messageBody]) { (error) in
+                if let e = error {
+                    print("Issue saving data in firestore, \(e)")
+                } else {
+                    print("Successfully save datax")
+                }
+            }
+        }
     }
     
     @IBAction func logoutPressed(_ sender: UIBarButtonItem) {
